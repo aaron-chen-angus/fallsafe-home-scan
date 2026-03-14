@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>FallSafe+ HDB Safety Walkthrough</title>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;overflow:hidden;background:#0C0A12;font-family:'Nunito',sans-serif;touch-action:none;user-select:none;-webkit-user-select:none}
+#app{width:100%;height:100%;display:flex;justify-content:center;align-items:center}
+#gc{position:relative;width:min(100vw,56.25vh);height:min(100vh,177.78vw);max-width:450px;max-height:800px;overflow:hidden;border-radius:6px;background:#111}
+
+/* Room image */
+.room-img{position:absolute;inset:0;background-size:cover;background-position:center;transition:opacity .5s ease}
+.room-img.hidden{opacity:0;pointer-events:none}
+
+/* Cinematic overlay on image */
+.room-vignette{position:absolute;inset:0;background:radial-gradient(ellipse at 50% 40%,transparent 30%,rgba(8,6,14,0.4) 100%);pointer-events:none;z-index:1}
+
+/* Scan line effect */
+.scan-overlay{position:absolute;inset:0;pointer-events:none;z-index:2;background:repeating-linear-gradient(0deg,transparent,transparent 3px,rgba(0,0,0,0.015) 3px,rgba(0,0,0,0.015) 4px);mix-blend-mode:multiply}
+
+/* ── HUD ── */
+#hud{position:absolute;top:0;left:0;right:0;z-index:20;padding:10px 14px 8px;background:linear-gradient(180deg,rgba(10,8,16,0.92) 0%,rgba(10,8,16,0.6) 60%,transparent 100%)}
+#hud-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px}
+#rname{font-family:'Rajdhani',sans-serif;font-size:14px;font-weight:700;color:#6EE7B7;text-transform:uppercase;letter-spacing:3px;text-shadow:0 0 12px rgba(110,231,183,0.3)}
+#ctr{font-family:'Rajdhani',sans-serif;font-size:11px;font-weight:600;color:rgba(255,255,255,0.45)}
+#ctr b{color:#6EE7B7}
+#pbar{width:100%;height:2px;background:rgba(255,255,255,0.06);border-radius:1px;overflow:hidden}
+#pfill{height:100%;width:0%;background:linear-gradient(90deg,#6EE7B7,#A7F3D0);border-radius:1px;transition:width .5s;box-shadow:0 0 6px rgba(110,231,183,0.3)}
+
+/* Subtitle hint */
+#hint{position:absolute;top:52px;left:14px;right:14px;z-index:20;text-align:center;font-size:10px;color:rgba(255,255,255,0.35);letter-spacing:0.5px;transition:opacity .3s}
+
+/* ── HAZARD HOTSPOTS ── */
+.hz-spot{position:absolute;z-index:10;cursor:pointer;display:flex;flex-direction:column;align-items:center}
+.hz-ring{width:44px;height:44px;border-radius:50%;display:flex;align-items:center;justify-content:center;position:relative;transition:transform .15s}
+.hz-ring:active{transform:scale(0.9)}
+
+/* Pulsing ring */
+.hz-ring::before{content:'';position:absolute;inset:-4px;border-radius:50%;border:2px solid;animation:hzPulse 2s infinite ease-out;opacity:0.6}
+.hz-ring::after{content:'';position:absolute;inset:-12px;border-radius:50%;border:1.5px solid;animation:hzPulse 2s 0.4s infinite ease-out;opacity:0.3}
+.hz-spot.high .hz-ring::before,.hz-spot.high .hz-ring::after{border-color:#F43F5E}
+.hz-spot.medium .hz-ring::before,.hz-spot.medium .hz-ring::after{border-color:#F59E0B}
+.hz-spot.low .hz-ring::before,.hz-spot.low .hz-ring::after{border-color:#10B981}
+@keyframes hzPulse{0%{transform:scale(0.8);opacity:0.6}100%{transform:scale(1.8);opacity:0}}
+
+/* Inner dot */
+.hz-dot{width:14px;height:14px;border-radius:50%;box-shadow:0 0 12px currentColor;position:relative;z-index:2}
+.hz-spot.high .hz-dot{background:#F43F5E;color:#F43F5E}
+.hz-spot.medium .hz-dot{background:#F59E0B;color:#F59E0B}
+.hz-spot.low .hz-dot{background:#10B981;color:#10B981}
+
+/* Label tag */
+.hz-tag{position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);white-space:nowrap;font-family:'Rajdhani',sans-serif;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1px;padding:3px 8px;border-radius:4px;color:#fff;animation:hzFloat 3s ease-in-out infinite;pointer-events:none}
+.hz-tag::after{content:'';position:absolute;top:100%;left:50%;transform:translateX(-50%);border-left:4px solid transparent;border-right:4px solid transparent;border-top:4px solid}
+.hz-spot.high .hz-tag{background:rgba(244,63,94,0.88);}.hz-spot.high .hz-tag::after{border-top-color:rgba(244,63,94,0.88)}
+.hz-spot.medium .hz-tag{background:rgba(245,158,11,0.88)}.hz-spot.medium .hz-tag::after{border-top-color:rgba(245,158,11,0.88)}
+.hz-spot.low .hz-tag{background:rgba(16,185,129,0.88)}.hz-spot.low .hz-tag::after{border-top-color:rgba(16,185,129,0.88)}
+@keyframes hzFloat{0%,100%{transform:translateX(-50%) translateY(0)}50%{transform:translateX(-50%) translateY(-4px)}}
+
+.hz-spot.resolved{opacity:0;pointer-events:none;transition:all .6s}
+
+/* Resolved checkmark */
+.hz-resolved{position:absolute;z-index:10;pointer-events:none;display:flex;align-items:center;justify-content:center}
+.hz-check{width:28px;height:28px;border-radius:50%;background:rgba(16,185,129,0.85);display:flex;align-items:center;justify-content:center;font-size:14px;box-shadow:0 0 12px rgba(16,185,129,0.3);animation:checkPop .4s cubic-bezier(.34,1.56,.64,1)}
+@keyframes checkPop{0%{transform:scale(0)}100%{transform:scale(1)}}
+
+/* ── DOOR NAV BUTTONS ── */
+.door-btn{position:absolute;z-index:12;cursor:pointer;display:flex;align-items:center;gap:6px;padding:8px 14px;background:rgba(10,8,16,0.7);backdrop-filter:blur(10px);border:1px solid rgba(110,231,183,0.2);border-radius:8px;transition:all .2s;color:#6EE7B7}
+.door-btn:hover{background:rgba(110,231,183,0.08);border-color:rgba(110,231,183,0.4)}
+.door-btn:active{transform:scale(0.95)}
+.door-btn svg{width:14px;height:14px;flex-shrink:0}
+.door-btn span{font-family:'Rajdhani',sans-serif;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px}
+.door-btn.left{left:10px}
+.door-btn.right{right:10px}
+
+/* ── ROOM NAV (bottom) ── */
+#nav{position:absolute;bottom:12px;left:0;right:0;z-index:20;display:flex;justify-content:center;gap:6px;padding:0 12px}
+.rm-btn{flex:1;max-width:100px;padding:8px 4px;background:rgba(10,8,16,0.7);backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,0.06);border-radius:8px;text-align:center;cursor:pointer;transition:all .2s}
+.rm-btn.active{border-color:rgba(110,231,183,0.4);background:rgba(110,231,183,0.08)}
+.rm-btn:active{transform:scale(0.95)}
+.rm-nm{font-family:'Rajdhani',sans-serif;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:rgba(255,255,255,0.4)}
+.rm-btn.active .rm-nm{color:#6EE7B7}
+.rm-dots{display:flex;justify-content:center;gap:3px;margin-top:3px}
+.rm-dot{width:5px;height:5px;border-radius:50%}
+.rm-dot.pending{background:rgba(255,255,255,0.15)}
+.rm-dot.done{background:#10B981}
+
+/* ── INFO PANEL ── */
+#info{position:absolute;inset:0;z-index:50;background:rgba(8,6,14,0.9);backdrop-filter:blur(16px);display:none;justify-content:center;align-items:flex-end;padding:12px}
+#info.on{display:flex}
+#ipnl{width:100%;background:linear-gradient(180deg,#1C1A26,#16141E);border:1px solid rgba(255,255,255,0.06);border-radius:16px;padding:20px 18px;animation:su .3s cubic-bezier(.16,1,.3,1)}
+@keyframes su{from{transform:translateY(24px);opacity:0}to{transform:translateY(0);opacity:1}}
+#ip-hd{display:flex;align-items:flex-start;gap:12px;margin-bottom:10px}
+#ip-ic{width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
+#ip-ic.high{background:rgba(244,63,94,0.12)}
+#ip-ic.medium{background:rgba(245,158,11,0.12)}
+#ip-ic.low{background:rgba(16,185,129,0.12)}
+#ip-nm{font-family:'Rajdhani',sans-serif;font-size:17px;font-weight:700;color:#F0F2F8;line-height:1.15}
+#ip-bg{display:inline-block;padding:2px 8px;border-radius:4px;font-family:'Rajdhani',sans-serif;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-top:3px}
+#ip-bg.high{background:rgba(244,63,94,0.14);color:#F43F5E}
+#ip-bg.medium{background:rgba(245,158,11,0.14);color:#F59E0B}
+#ip-bg.low{background:rgba(16,185,129,0.14);color:#10B981}
+#ip-ds{font-size:12px;line-height:1.65;color:rgba(255,255,255,0.5);margin-bottom:14px}
+#ip-tip{font-size:11px;line-height:1.5;color:rgba(110,231,183,0.7);margin-bottom:14px;padding:8px 10px;background:rgba(110,231,183,0.04);border-radius:6px;border-left:3px solid rgba(110,231,183,0.3)}
+#ip-ac{display:flex;flex-direction:column;gap:6px}
+.ab{width:100%;padding:11px;border:none;border-radius:9px;font-family:'Rajdhani',sans-serif;font-size:13px;font-weight:700;cursor:pointer;text-transform:uppercase;letter-spacing:1px;transition:transform .1s}.ab:active{transform:scale(.97)}
+.ab-r{background:linear-gradient(135deg,#6EE7B7,#A7F3D0);color:#0A0D14}
+.ab-x{background:rgba(244,63,94,0.1);color:#F43F5E;border:1px solid rgba(244,63,94,0.18)}
+.ab-s{background:transparent;color:rgba(255,255,255,0.3);font-size:11px}
+
+/* ── TRANSITION ── */
+#trans{position:absolute;inset:0;z-index:60;background:#0C0A12;display:none;justify-content:center;align-items:center;flex-direction:column;gap:10px}
+#trans.on{display:flex}
+#t-nm{font-family:'Rajdhani',sans-serif;font-size:20px;font-weight:700;color:#6EE7B7;text-transform:uppercase;letter-spacing:5px;opacity:0;animation:tf .5s .1s ease forwards}
+#t-sub{font-size:10px;color:rgba(255,255,255,0.25);opacity:0;animation:tf .5s .25s ease forwards}
+@keyframes tf{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}
+
+/* ── COMPLETION ── */
+#comp{position:absolute;inset:0;z-index:70;background:linear-gradient(180deg,#0C0A12,#14121C);display:none;flex-direction:column;justify-content:center;align-items:center;padding:28px;text-align:center}
+#comp.on{display:flex}
+.ci{font-size:48px;margin-bottom:16px}
+.ct{font-family:'Rajdhani',sans-serif;font-size:24px;font-weight:700;color:#6EE7B7;text-transform:uppercase;letter-spacing:2px;margin-bottom:6px}
+.csb{font-size:12px;color:rgba(255,255,255,0.4);line-height:1.7;margin-bottom:24px;max-width:300px}
+.css{display:flex;gap:28px;margin-bottom:28px}
+.cst{text-align:center}
+.csn{font-family:'Rajdhani',sans-serif;font-size:32px;font-weight:700;color:#F0F2F8}
+.csl{font-size:8px;color:rgba(255,255,255,0.3);text-transform:uppercase;letter-spacing:1px}
+.cb{padding:13px 32px;background:linear-gradient(135deg,#6EE7B7,#A7F3D0);color:#0A0D14;border:none;border-radius:9px;font-family:'Rajdhani',sans-serif;font-size:14px;font-weight:700;text-transform:uppercase;letter-spacing:1px;cursor:pointer}
+
+/* ── INTRO SCREEN ── */
+#intro{position:absolute;inset:0;z-index:80;background:linear-gradient(180deg,#0C0A12,#14121C);display:flex;flex-direction:column;justify-content:center;align-items:center;padding:30px;text-align:center}
+#intro.hidden{display:none}
+.intro-icon{font-size:52px;margin-bottom:18px}
+.intro-title{font-family:'Rajdhani',sans-serif;font-size:26px;font-weight:700;color:#6EE7B7;text-transform:uppercase;letter-spacing:3px;margin-bottom:6px}
+.intro-sub{font-size:12px;color:rgba(255,255,255,0.4);line-height:1.7;margin-bottom:28px;max-width:300px}
+.intro-steps{text-align:left;margin-bottom:28px;width:100%;max-width:280px}
+.intro-step{display:flex;align-items:flex-start;gap:10px;margin-bottom:12px}
+.intro-num{font-family:'Rajdhani',sans-serif;font-size:16px;font-weight:700;color:#6EE7B7;width:22px;height:22px;border-radius:50%;border:1.5px solid rgba(110,231,183,0.3);display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px}
+.intro-txt{font-size:12px;color:rgba(255,255,255,0.5);line-height:1.5}
+.intro-btn{padding:14px 40px;background:linear-gradient(135deg,#6EE7B7,#A7F3D0);color:#0A0D14;border:none;border-radius:10px;font-family:'Rajdhani',sans-serif;font-size:15px;font-weight:700;text-transform:uppercase;letter-spacing:2px;cursor:pointer}
+</style>
+</head>
+<body>
+<div id="app">
+<div id="gc">
+  <!-- Room images (stacked, show/hide) -->
+  <div class="room-img" id="img-living" style="background-image:url('images/living-room.jpg')"></div>
+  <div class="room-img hidden" id="img-dining" style="background-image:url('images/dining-room.jpg')"></div>
+  <div class="room-img hidden" id="img-kitchen" style="background-image:url('images/kitchen.jpg')"></div>
+  <div class="room-img hidden" id="img-bedroom" style="background-image:url('images/bedroom.jpg')"></div>
+  <div class="room-vignette"></div>
+  <div class="scan-overlay"></div>
+
+  <!-- HUD -->
+  <div id="hud">
+    <div id="hud-row"><div id="rname">Living Room</div><div id="ctr"><b id="rc">0</b> / <b id="tc">0</b> Resolved</div></div>
+    <div id="pbar"><div id="pfill"></div></div>
+  </div>
+  <div id="hint">Tap the glowing markers to inspect fall hazards</div>
+
+  <!-- Overlays layer (hazards, doors) -->
+  <div id="ol" style="position:absolute;inset:0;z-index:10"></div>
+
+  <!-- Bottom nav -->
+  <div id="nav"></div>
+
+  <!-- Info panel -->
+  <div id="info">
+    <div id="ipnl">
+      <div id="ip-hd"><div id="ip-ic"></div><div><div id="ip-nm"></div><div id="ip-bg"></div></div></div>
+      <div id="ip-ds"></div>
+      <div id="ip-tip"></div>
+      <div id="ip-ac">
+        <button class="ab ab-r" id="aR">↗ Relocate to Safe Spot</button>
+        <button class="ab ab-x" id="aX">✕ Remove from Room</button>
+        <button class="ab ab-s" id="aS">Skip for Now</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Transition -->
+  <div id="trans"><div id="t-nm"></div><div id="t-sub">Scanning for hazards...</div></div>
+
+  <!-- Completion -->
+  <div id="comp">
+    <div class="ci">🛡️</div><div class="ct">Assessment Complete</div>
+    <div class="csb">You've assessed all fall hazards across every room in this HDB unit. This home is now safer for elderly residents.</div>
+    <div class="css"><div class="cst"><div class="csn" id="sR">0</div><div class="csl">Relocated</div></div><div class="cst"><div class="csn" id="sX">0</div><div class="csl">Removed</div></div><div class="cst"><div class="csn" id="sS">0</div><div class="csl">Skipped</div></div></div>
+    <button class="cb" id="cRe">Start Over</button>
+  </div>
+
+  <!-- Intro -->
+  <div id="intro">
+    <div class="intro-icon">🏠</div>
+    <div class="intro-title">Home Scanning</div>
+    <div class="intro-sub">Scan your home environment to identify potential fall hazards that may place elderly residents at risk.</div>
+    <div class="intro-steps">
+      <div class="intro-step"><div class="intro-num">1</div><div class="intro-txt">Walk through each area of your home — Living Room, Dining Area, Kitchen, and Bedroom.</div></div>
+      <div class="intro-step"><div class="intro-num">2</div><div class="intro-txt">Use your camera to scan the space and look for highlighted objects or conditions that may increase fall risk.</div></div>
+      <div class="intro-step"><div class="intro-num">3</div><div class="intro-txt">Review the identified hazards and choose to relocate, remove, or leave them if they are safe.</div></div>
+    </div>
+    <button class="intro-btn" id="introBtn">Begin Home Scan</button>
+  </div>
+</div>
+</div>
+
+<script>
+// ================================================================
+// GAME DATA — hazards positioned on actual photo coordinates
+// ================================================================
+const ROOMS = {
+  living: {
+    id: 'living', name: 'Living Room', imgId: 'img-living',
+    hazards: [
+      {
+        id:'l1', x:12, y:82, risk:'high',
+        name:'Shoes & Slippers Scattered on Floor',
+        desc:'Multiple pairs of shoes and slippers scattered along the walking path near the entrance area. These are a significant trip hazard, especially for seniors moving through the room.',
+        tip:'Move all footwear to a shoe rack or cabinet near the door. Keep the walking path completely clear.'
+      },
+      {
+        id:'l2', x:42, y:72, risk:'high',
+        name:'Bag Left on Walking Path',
+        desc:'A large bag placed directly in the middle of the floor, blocking the main walkway between the sofa and TV console.',
+        tip:'Store bags on hooks, inside cabinets, or on shelves — never on the floor in walking paths.'
+      },
+      {
+        id:'l3', x:50, y:55, risk:'medium',
+        name:'Cluttered Coffee Table',
+        desc:'Items piled on the coffee table may fall onto the floor and create additional trip hazards. The table itself is also positioned centrally, reducing walkway width.',
+        tip:'Keep the coffee table clear of loose items. Consider a table with rounded corners to reduce injury risk.'
+      },
+      {
+        id:'l4', x:60, y:60, risk:'low',
+        name:'Rug on Wooden Floor',
+        desc:'An area rug placed on the polished wooden floor without anti-slip backing. Rugs on smooth surfaces can slide underfoot and cause falls.',
+        tip:'Secure the rug with a non-slip mat underneath, or remove it entirely if it tends to shift when walked on.'
+      }
+    ]
+  },
+  dining: {
+    id: 'dining', name: 'Dining Room', imgId: 'img-dining',
+    hazards: [
+      {
+        id:'d1', x:40, y:78, risk:'high',
+        name:'Newspapers & Items Scattered on Floor',
+        desc:'Newspapers, magazines, and loose items strewn across the floor creating multiple trip points across the walking area.',
+        tip:'Recycle old newspapers daily. Keep floors completely clear — every item on the floor is a potential fall risk.'
+      },
+      {
+        id:'d2', x:70, y:78, risk:'high',
+        name:'Boxes & Clutter on Floor',
+        desc:'Storage boxes, bags, and miscellaneous items cluttering the floor near the cabinets. This blocks the walkway and creates serious trip hazards.',
+        tip:'Store items inside cabinets or on shelves. Use vertical storage to free up floor space.'
+      },
+      {
+        id:'d3', x:22, y:72, risk:'medium',
+        name:'Small Furniture in Walkway',
+        desc:'A small wooden storage unit placed in the walking path, reducing the clear width for safe movement.',
+        tip:'Rearrange furniture to maintain at least 90cm of clear walkway width. Remove unnecessary items from the room.'
+      },
+      {
+        id:'d4', x:40, y:52, risk:'medium',
+        name:'Chair Not Tucked In',
+        desc:'A dining chair pushed out from the table and left in the walking area. This is a common trip hazard in dining rooms.',
+        tip:'Always tuck chairs in after use. Consider chairs that slide easily to encourage this habit.'
+      }
+    ]
+  },
+  kitchen: {
+    id: 'kitchen', name: 'Kitchen', imgId: 'img-kitchen',
+    hazards: [
+      {
+        id:'k1', x:40, y:78, risk:'high',
+        name:'Debris & Spills on Floor',
+        desc:'Food debris, liquid spills, and scattered items on the kitchen floor tiles. This creates both slip and trip hazards, especially near the cooking area.',
+        tip:'Clean up spills immediately. Sweep the kitchen floor daily. Place a non-slip mat near the sink and stove.'
+      },
+      {
+        id:'k2', x:60, y:70, risk:'high',
+        name:'Appliance Blocking Walkway',
+        desc:'A heavy appliance (washing machine / equipment) placed in the middle of the kitchen floor, severely narrowing the walkway and creating an obstruction.',
+        tip:'Secure large appliances against walls. Keep the center of the kitchen clear for safe movement.'
+      },
+      {
+        id:'k3', x:20, y:65, risk:'medium',
+        name:'Open Cabinet / Exposed Items',
+        desc:'Lower cabinet left open with items exposed and partially on the floor. Protruding items and open doors are trip hazards.',
+        tip:'Keep cabinet doors closed at all times. Store items securely inside so nothing protrudes or falls out.'
+      },
+      {
+        id:'k4', x:78, y:68, risk:'medium',
+        name:'Items on Floor Near Counter',
+        desc:'Various items and equipment placed on the floor near the kitchen counter area, reducing safe walking space.',
+        tip:'Use wall-mounted shelves or counter-top organizers. The floor should remain completely clear at all times.'
+      }
+    ]
+  },
+  bedroom: {
+    id: 'bedroom', name: 'Bedroom', imgId: 'img-bedroom',
+    hazards: [
+      {
+        id:'b1', x:35, y:75, risk:'high',
+        name:'Clothes & Items on Floor',
+        desc:'Clothes, bags, and personal items scattered across the floor between the bed and dresser. This is extremely dangerous for night-time trips to the bathroom.',
+        tip:'Use laundry baskets for clothes. Install hooks behind the door for bags. The path from bed to door must be clear.'
+      },
+      {
+        id:'b2', x:60, y:80, risk:'high',
+        name:'Shoes & Slippers Near Bed',
+        desc:'Footwear scattered on the floor beside and under the bed. Stepping on these when getting out of bed — especially at night — is a very common cause of falls.',
+        tip:'Keep one pair of non-slip slippers right beside the bed, neatly placed. Store all other shoes in a rack.'
+      },
+      {
+        id:'b3', x:72, y:75, risk:'medium',
+        name:'Items Piled at Foot of Bed',
+        desc:'Clothes, pillows, and items piled at the foot and side of the bed, spilling onto the floor and blocking the walking path.',
+        tip:'Fold and store items before bed. Use under-bed storage containers to keep the floor clear.'
+      },
+      {
+        id:'b4', x:18, y:60, risk:'medium',
+        name:'Cluttered Dresser Area',
+        desc:'Items stacked on and around the dresser, some at risk of falling to the floor. The laundry basket also narrows the walkway.',
+        tip:'Organize dresser top items. Move the laundry basket to a corner or inside a closet where it won\'t block movement.'
+      }
+    ]
+  }
+};
+
+// ================================================================
+// STATE
+// ================================================================
+let curRoom = 'living';
+let resolved = 0;
+let stats = { relocated:0, removed:0, skipped:0 };
+let activeH = null;
+const TOTAL = Object.values(ROOMS).reduce((s,r) => s + r.hazards.length, 0);
+const roomOrder = ['living','dining','kitchen','bedroom'];
+
+// Init hazard state
+Object.values(ROOMS).forEach(r => r.hazards.forEach(h => { h.resolved = false; h.action = null; }));
+
+document.getElementById('tc').textContent = TOTAL;
+
+// ================================================================
+// RENDER
+// ================================================================
+function render() {
+  const room = ROOMS[curRoom];
+
+  // Show correct image
+  document.querySelectorAll('.room-img').forEach(el => el.classList.add('hidden'));
+  document.getElementById(room.imgId).classList.remove('hidden');
+
+  // HUD
+  document.getElementById('rname').textContent = room.name;
+  document.getElementById('hint').textContent =
+    room.hazards.filter(h => !h.resolved).length > 0
+      ? 'Tap the glowing markers to inspect fall hazards'
+      : 'All hazards assessed! Move to next room →';
+
+  // Overlays
+  const ol = document.getElementById('ol');
+  ol.innerHTML = '';
+
+  room.hazards.forEach(h => {
+    if (h.resolved) {
+      // Show resolved checkmark
+      const ck = document.createElement('div');
+      ck.className = 'hz-resolved';
+      ck.style.cssText = `left:${h.x}%;top:${h.y}%;transform:translate(-50%,-50%)`;
+      ck.innerHTML = '<div class="hz-check">✓</div>';
+      ol.appendChild(ck);
+      return;
+    }
+
+    const el = document.createElement('div');
+    el.className = `hz-spot ${h.risk}`;
+    el.style.cssText = `left:${h.x}%;top:${h.y}%;transform:translate(-50%,-50%)`;
+    el.innerHTML = `
+      <div class="hz-tag">${h.risk === 'high' ? '⚠ HIGH RISK' : h.risk === 'medium' ? '⚡ MEDIUM' : '● LOW'}</div>
+      <div class="hz-ring"><div class="hz-dot"></div></div>
+    `;
+    el.onclick = () => openInfo(h);
+    ol.appendChild(el);
+  });
+
+  // Door nav buttons
+  const ri = roomOrder.indexOf(curRoom);
+  if (ri > 0) {
+    const prev = document.createElement('div');
+    prev.className = 'door-btn left';
+    prev.style.top = '50%';
+    prev.style.transform = 'translateY(-50%)';
+    prev.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg><span>${ROOMS[roomOrder[ri-1]].name}</span>`;
+    prev.onclick = () => goRoom(roomOrder[ri-1]);
+    ol.appendChild(prev);
+  }
+  if (ri < roomOrder.length - 1) {
+    const next = document.createElement('div');
+    next.className = 'door-btn right';
+    next.style.top = '50%';
+    next.style.transform = 'translateY(-50%)';
+    next.innerHTML = `<span>${ROOMS[roomOrder[ri+1]].name}</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>`;
+    next.onclick = () => goRoom(roomOrder[ri+1]);
+    ol.appendChild(next);
+  }
+
+  buildNav();
+  updProg();
+}
+
+// Bottom nav
+function buildNav() {
+  const nav = document.getElementById('nav');
+  nav.innerHTML = '';
+  roomOrder.forEach(rid => {
+    const r = ROOMS[rid];
+    const btn = document.createElement('div');
+    btn.className = 'rm-btn' + (rid === curRoom ? ' active' : '');
+    const dots = r.hazards.map(h =>
+      `<div class="rm-dot ${h.resolved ? 'done' : 'pending'}"></div>`
+    ).join('');
+    btn.innerHTML = `<div class="rm-nm">${r.name.replace(' Room','')}</div><div class="rm-dots">${dots}</div>`;
+    btn.onclick = () => goRoom(rid);
+    nav.appendChild(btn);
+  });
+}
+
+// ================================================================
+// INFO PANEL
+// ================================================================
+const $info = document.getElementById('info');
+function openInfo(h) {
+  activeH = h.id;
+  const icons = {high:'⚠️',medium:'⚡',low:'💡'};
+  const el = (id) => document.getElementById(id);
+  el('ip-ic').textContent = icons[h.risk];
+  el('ip-ic').className = h.risk;
+  el('ip-nm').textContent = h.name;
+  const bg = el('ip-bg');
+  bg.textContent = h.risk + ' risk'; bg.className = h.risk;
+  el('ip-ds').textContent = h.desc;
+  el('ip-tip').textContent = '💡 ' + h.tip;
+  $info.classList.add('on');
+}
+function closeInfo() { $info.classList.remove('on'); activeH = null; }
+function resolve(action) {
+  if (!activeH) return;
+  for (const r of Object.values(ROOMS)) {
+    const h = r.hazards.find(hz => hz.id === activeH);
+    if (h && !h.resolved) {
+      h.resolved = true; h.action = action; resolved++;
+      stats[action==='relocate'?'relocated':action==='remove'?'removed':'skipped']++;
+      break;
+    }
+  }
+  closeInfo(); render();
+  if (resolved >= TOTAL) setTimeout(showComp, 800);
+}
+document.getElementById('aR').onclick = () => resolve('relocate');
+document.getElementById('aX').onclick = () => resolve('remove');
+document.getElementById('aS').onclick = () => resolve('skip');
+$info.onclick = e => { if (e.target === $info) closeInfo(); };
+
+// ================================================================
+// NAVIGATION
+// ================================================================
+const $trans = document.getElementById('trans');
+function goRoom(tid) {
+  if (!ROOMS[tid] || tid === curRoom) return;
+  document.getElementById('t-nm').textContent = ROOMS[tid].name;
+  $trans.classList.add('on');
+  setTimeout(() => { curRoom = tid; render(); }, 350);
+  setTimeout(() => { $trans.classList.remove('on'); }, 900);
+}
+
+function updProg() {
+  document.getElementById('rc').textContent = resolved;
+  document.getElementById('pfill').style.width = ((resolved/TOTAL)*100) + '%';
+}
+
+function showComp() {
+  document.getElementById('sR').textContent = stats.relocated;
+  document.getElementById('sX').textContent = stats.removed;
+  document.getElementById('sS').textContent = stats.skipped;
+  document.getElementById('comp').classList.add('on');
+}
+
+document.getElementById('cRe').onclick = () => {
+  Object.values(ROOMS).forEach(r => r.hazards.forEach(h => { h.resolved = false; h.action = null; }));
+  curRoom = 'living'; resolved = 0; stats = {relocated:0,removed:0,skipped:0};
+  document.getElementById('comp').classList.remove('on');
+  render();
+};
+
+// Keyboard
+document.addEventListener('keydown', e => {
+  const ri = roomOrder.indexOf(curRoom);
+  if (e.key === 'ArrowLeft' && ri > 0) goRoom(roomOrder[ri-1]);
+  if (e.key === 'ArrowRight' && ri < roomOrder.length-1) goRoom(roomOrder[ri+1]);
+  if (e.key === 'Escape') closeInfo();
+});
+
+// Intro
+document.getElementById('introBtn').onclick = () => {
+  document.getElementById('intro').classList.add('hidden');
+  render();
+};
+</script>
+</body>
+</html>
